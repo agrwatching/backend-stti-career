@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer'); // hanya untuk deteksi error Multer di error handler
+const userManagementRoutes = require("./routes/userManagement");
 
 const { testConnection, initializeDatabase } = require('./config/database');
 // >>> Single source of truth (semua path upload ikut ini)
@@ -87,6 +88,9 @@ app.use('/api/applicant', applicantRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/admin', adminRoutes);
 
+// majemen User
+app.use("/api/users", userManagementRoutes);
+
 // Root
 app.get('/', (_req, res) => {
   res.json({
@@ -105,6 +109,7 @@ app.get('/', (_req, res) => {
     documentation: 'See README.md for API documentation'
   });
 });
+
 
 // Error handler (global)
 app.use((err, req, res, _next) => {
