@@ -1,8 +1,10 @@
 // controllers/bookmarkController.js
 const { pool } = require("../config/database");
-const buildBaseUrl = (req) => process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+const buildBaseUrl = (req) =>
+  process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
 
-const companyLogoUrl = (req, file) => (file ? `${buildBaseUrl(req)}/uploads/company_logos/${file}` : null);
+const companyLogoUrl = (req, file) =>
+  file ? `${buildBaseUrl(req)}/uploads/company_logos/${file}` : null;
 
 /**
  * Get all bookmarked jobs for authenticated user
@@ -12,11 +14,15 @@ const getBookmarks = async (req, res) => {
   try {
     // 1) pastikan req.user.id ada & angka
     if (!req.user || req.user.id === undefined || req.user.id === null) {
-      return res.status(401).json({ success: false, message: "User tidak terautentikasi" });
+      return res
+        .status(401)
+        .json({ success: false, message: "User tidak terautentikasi" });
     }
     const userId = Number(req.user.id);
     if (!Number.isFinite(userId)) {
-      return res.status(400).json({ success: false, message: "User ID tidak valid" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID tidak valid" });
     }
 
     // 2) page/limit -> integer valid (fallback aman)
@@ -62,7 +68,10 @@ const getBookmarks = async (req, res) => {
     const [bookmarkedJobs] = await pool.query(sql, [userId]);
 
     // Hitung total pages
-    const totalCount = bookmarkedJobs.length > 0 ? Number(bookmarkedJobs[0].total_count) || 0 : 0;
+    const totalCount =
+      bookmarkedJobs.length > 0
+        ? Number(bookmarkedJobs[0].total_count) || 0
+        : 0;
     const totalPages = Math.ceil(totalCount / limit);
 
     // Format response data
@@ -134,7 +143,10 @@ const addBookmark = async (req, res) => {
     }
 
     // Cek apakah job post exists dan masih aktif
-    const [jobPost] = await pool.execute("SELECT id, title, is_active, hr_id FROM job_posts WHERE id = ?", [job_id]);
+    const [jobPost] = await pool.execute(
+      "SELECT id, title, is_active, hr_id FROM job_posts WHERE id = ?",
+      [job_id]
+    );
 
     if (jobPost.length === 0) {
       return res.status(404).json({
@@ -159,7 +171,10 @@ const addBookmark = async (req, res) => {
     }
 
     // Cek apakah sudah pernah di-bookmark sebelumnya
-    const [existing] = await pool.execute("SELECT id FROM bookmarks WHERE user_id = ? AND job_id = ?", [userId, job_id]);
+    const [existing] = await pool.execute(
+      "SELECT id FROM bookmarks WHERE user_id = ? AND job_id = ?",
+      [userId, job_id]
+    );
 
     if (existing.length > 0) {
       return res.status(400).json({
@@ -169,7 +184,10 @@ const addBookmark = async (req, res) => {
     }
 
     // Tambah bookmark
-    const [result] = await pool.execute("INSERT INTO bookmarks (user_id, job_id) VALUES (?, ?)", [userId, job_id]);
+    const [result] = await pool.execute(
+      "INSERT INTO bookmarks (user_id, job_id) VALUES (?, ?)",
+      [userId, job_id]
+    );
 
     // Get the bookmarked job with details
     const [bookmarkedJob] = await pool.execute(
@@ -268,7 +286,10 @@ const removeBookmark = async (req, res) => {
     }
 
     // Hapus bookmark
-    await pool.execute("DELETE FROM bookmarks WHERE id = ? AND user_id = ?", [id, userId]);
+    await pool.execute("DELETE FROM bookmarks WHERE id = ? AND user_id = ?", [
+      id,
+      userId,
+    ]);
 
     res.json({
       success: true,
@@ -330,7 +351,10 @@ const removeBookmarkByJobId = async (req, res) => {
     }
 
     // Hapus bookmark
-    await pool.execute("DELETE FROM bookmarks WHERE user_id = ? AND job_id = ?", [userId, job_id]);
+    await pool.execute(
+      "DELETE FROM bookmarks WHERE user_id = ? AND job_id = ?",
+      [userId, job_id]
+    );
 
     res.json({
       success: true,
@@ -370,7 +394,10 @@ const checkBookmark = async (req, res) => {
     }
 
     // Cek apakah job sudah di-bookmark
-    const [bookmark] = await pool.execute("SELECT id, created_at FROM bookmarks WHERE user_id = ? AND job_id = ?", [userId, job_id]);
+    const [bookmark] = await pool.execute(
+      "SELECT id, created_at FROM bookmarks WHERE user_id = ? AND job_id = ?",
+      [userId, job_id]
+    );
 
     res.json({
       success: true,
@@ -400,7 +427,10 @@ const getBookmarkStats = async (req, res) => {
     const userId = req.user.id;
 
     // Get total bookmarks
-    const [totalResult] = await pool.execute("SELECT COUNT(*) as total FROM bookmarks WHERE user_id = ?", [userId]);
+    const [totalResult] = await pool.execute(
+      "SELECT COUNT(*) as total FROM bookmarks WHERE user_id = ?",
+      [userId]
+    );
 
     // Get bookmarks by location
     const [locationStats] = await pool.execute(
@@ -461,7 +491,8 @@ GROUP BY c.nama_companies
     );
 
     const activeCount = statusStats.find((s) => s.is_active === 1)?.count || 0;
-    const inactiveCount = statusStats.find((s) => s.is_active === 0)?.count || 0;
+    const inactiveCount =
+      statusStats.find((s) => s.is_active === 0)?.count || 0;
 
     res.json({
       success: true,
@@ -492,7 +523,14 @@ GROUP BY c.nama_companies
 const searchBookmarks = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { title, location, company, is_active, page = 1, limit = 10 } = req.query;
+    const {
+      title,
+      location,
+      company,
+      is_active,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
     const pageRaw = Number.parseInt(page, 10);
     const limitRaw = Number.parseInt(limit, 10);
@@ -557,7 +595,8 @@ WHERE ${whereClause}
       [...queryParams, limitNum, offset]
     );
 
-    const totalCount = searchResults.length > 0 ? searchResults[0].total_count : 0;
+    const totalCount =
+      searchResults.length > 0 ? searchResults[0].total_count : 0;
     const totalPages = Math.ceil(totalCount / limitNum);
 
     // Format response data

@@ -160,15 +160,23 @@ const applyForJob = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Kamu sudah melamar pekerjaan ini' });
     }
 
-    // siapkan URL file dari multer atau fallback profil
-    const baseUrl = `${req.protocol}://${req.get('host')}/uploads/files/`;
-    const rFn = req.files?.resume_file?.[0]?.filename;
-    const cFn = req.files?.cover_letter_file?.[0]?.filename;
-    const pFn = req.files?.portfolio_file?.[0]?.filename;
+// --- path uploads selalu pakai URL absolut ---
+const baseUrl = `${req.protocol}://${req.get('host')}/uploads/files/`;
 
-    const finalResume    = rFn ? baseUrl + rFn : (pRows[0].cv_file || null);
-    const finalCLFile    = cFn ? baseUrl + cFn : (pRows[0].cover_letter_file || null);
-    const finalPortfolio = pFn ? baseUrl + pFn : (pRows[0].portfolio_file || null);
+function toUrl(fileName) {
+  if (!fileName) return null;
+  if (fileName.startsWith('http')) return fileName; // sudah URL
+  return baseUrl + fileName;
+}
+
+const rFn = req.files?.resume_file?.[0]?.filename;
+const cFn = req.files?.cover_letter_file?.[0]?.filename;
+const pFn = req.files?.portfolio_file?.[0]?.filename;
+
+const finalResume    = toUrl(rFn || pRows[0].cv_file);
+const finalCLFile    = toUrl(cFn || pRows[0].cover_letter_file);
+const finalPortfolio = toUrl(pFn || pRows[0].portfolio_file);
+
 
     console.log('[APPLY URLs]', { finalResume, finalCLFile, finalPortfolio });
 

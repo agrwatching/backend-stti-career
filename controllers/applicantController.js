@@ -54,10 +54,11 @@ exports.getMyApplications = async (req, res) => {
   }
 };
 
-// GET all job applicants (with optional filter for HR or Applicant)
+// ✅ FIXED: HR hanya bisa melihat pelamar dari lowongan miliknya sendiri
 exports.getAllJobApplicants = async (req, res) => {
   try {
-    const { hrId, pelamarId, jobId, status } = req.query;
+    const user = req.user; // HR dari token login
+    const { pelamarId, jobId, status } = req.query;
 
     let sql = `
       SELECT 
@@ -66,6 +67,7 @@ exports.getAllJobApplicants = async (req, res) => {
         p.full_name AS nama,
         a.applied_at AS tanggal,
         p.cv_file AS cv,
+        a.resume_file,
         j.title AS posisi,
         a.status,
         a.cover_letter,
@@ -78,10 +80,14 @@ exports.getAllJobApplicants = async (req, res) => {
     `;
     const values = [];
 
-    if (hrId) {
+    // 🔹 Filter otomatis untuk HR
+    // Hanya menampilkan pelamar yang melamar ke job milik HR yang login
+    if (user.role === "hr") {
       sql += " AND j.hr_id = ?";
-      values.push(hrId);
+      values.push(user.id);
     }
+
+    // 🔹 Filter tambahan opsional (kalau admin ingin pakai query param)
     if (pelamarId) {
       sql += " AND a.pelamar_id = ?";
       values.push(pelamarId);
@@ -95,12 +101,16 @@ exports.getAllJobApplicants = async (req, res) => {
       values.push(status);
     }
 
+    sql += " ORDER BY a.applied_at DESC";
+
     const [results] = await db.query(sql, values);
     res.json({ success: true, data: results });
   } catch (err) {
+    console.error("getAllJobApplicants error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 // GET job applicant by ID
 // ✅ HR melihat detail pelamar yang melamar ke lowongan
@@ -267,6 +277,7 @@ exports.deleteJobApplicant = async (req, res) => {
 };
 
 // ✅ HR melihat daftar pelamar atau detail pelamar berdasarkan ID lamaran
+// controllers/applicantController.js
 exports.getApplicantDetailByApplicationId = async (req, res) => {
   const { application_id } = req.params;
   const baseUrl = `${req.protocol}://${req.get("host")}`;
@@ -275,13 +286,21 @@ exports.getApplicantDetailByApplicationId = async (req, res) => {
     let sql = `
       SELECT 
         a.id AS application_id,
+        a.job_id,
+        a.pelamar_id,
         a.status,
+        a.cover_letter,
         a.applied_at,
+        a.resume_file,
+        a.cover_letter_file,
+        a.portfolio_file,
+        a.notes,
+        a.reviewed_at,
+        a.reviewed_by,
+        a.created_at AS application_created_at,
+        a.updated_at AS application_updated_at,
+
         j.title AS posisi,
-        u.full_name,
-        u.email,
-        u.phone,
-        u.address,
         p.education_level,
         p.major,
         p.institution_name,
@@ -289,11 +308,17 @@ exports.getApplicantDetailByApplicationId = async (req, res) => {
         p.graduation_year,
         p.entry_year,
         p.cv_file,
-        p.cover_letter_file,
-        p.portfolio_file,
+        p.cover_letter_file AS profile_cover_letter_file,
+        p.portfolio_file AS profile_portfolio_file,
         p.profile_photo,
-        p.id AS pelamar_id,
-        u.id AS user_id
+        p.id AS pelamar_profile_id,
+
+        u.id AS user_id,
+        u.full_name,
+        u.email,
+        u.phone,
+        u.address
+
       FROM applications a
       JOIN pelamar_profiles p ON a.pelamar_id = p.id
       JOIN users u ON p.user_id = u.id
@@ -303,7 +328,7 @@ exports.getApplicantDetailByApplicationId = async (req, res) => {
 
     const values = [];
 
-    // Kalau ada parameter ID, filter by application_id
+    // kalau ada parameter ID
     if (application_id) {
       sql += " AND a.id = ?";
       values.push(application_id);
@@ -317,41 +342,43 @@ exports.getApplicantDetailByApplicationId = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // Tambahkan relasi pengalaman & sertifikat untuk tiap pelamar
     const results = await Promise.all(
-      rows.map(async (data) => {
-        data.cv_file_url = data.cv_file
-          ? `${baseUrl}/uploads/files/${data.cv_file}`
+      rows.map(async (row) => {
+        // tambahkan URL file otomatis
+        row.resume_file_url = row.resume_file
+          ? `${baseUrl}/uploads/files/${row.resume_file}`
           : null;
-        data.cover_letter_file_url = data.cover_letter_file
-          ? `${baseUrl}/uploads/files/${data.cover_letter_file}`
+        row.cover_letter_file_url = row.cover_letter_file
+          ? `${baseUrl}/uploads/files/${row.cover_letter_file}`
           : null;
-        data.portfolio_file_url = data.portfolio_file
-          ? `${baseUrl}/uploads/files/${data.portfolio_file}`
+        row.portfolio_file_url = row.portfolio_file
+          ? `${baseUrl}/uploads/files/${row.portfolio_file}`
           : null;
-        data.profile_photo_url = data.profile_photo
-          ? `${baseUrl}/uploads/images/${data.profile_photo}`
+        row.profile_photo_url = row.profile_photo
+          ? `${baseUrl}/uploads/images/${row.profile_photo}`
           : null;
 
+        // ambil pengalaman kerja
         const [work_experiences] = await db.query(
           "SELECT company_name, position, start_date, end_date, job_description FROM work_experiences WHERE user_id = ?",
-          [data.user_id]
+          [row.user_id]
         );
 
+        // ambil sertifikat
         const [certificates] = await db.query(
           "SELECT certificate_name, issuer, issue_date, expiry_date, certificate_file FROM certificates WHERE user_id = ?",
-          [data.user_id]
+          [row.user_id]
         );
 
-        data.work_experiences = work_experiences;
-        data.certificates = certificates.map((c) => ({
+        row.work_experiences = work_experiences;
+        row.certificates = certificates.map((c) => ({
           ...c,
           certificate_file_url: c.certificate_file
             ? `${baseUrl}/uploads/files/${c.certificate_file}`
             : null,
         }));
 
-        return data;
+        return row;
       })
     );
 

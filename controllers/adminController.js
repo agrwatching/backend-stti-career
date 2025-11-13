@@ -273,7 +273,6 @@ const getDashboardStats = async (_req, res) => {
   }
 };
 
-
 /**
  * Get activity logs
  */
@@ -292,8 +291,6 @@ const getActivityLogs = async (_req, res) => {
     return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 };
-
-
 
 module.exports = {
   getAllUsers,
